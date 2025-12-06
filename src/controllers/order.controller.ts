@@ -1,5 +1,5 @@
 import type { Request, Response } from "express";
-import { and, desc, eq, like, or } from "drizzle-orm";
+import { and, desc, eq, like, or, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { orders, orderItems, products } from "../db/schema.js";
 
@@ -20,62 +20,84 @@ export const createOrder = async (req: Request, res: Response) => {
   }
 
   try {
-    const result = await db.transaction(async (tx) => {
-      let totalAmount = 0;
-      const finalItems = [];
+    // Removed transaction - Neon HTTP driver doesn't support transactions
+    let totalCents = 0;
+    const finalItems = [];
 
-      for (const item of items) {
-        const [product] = await tx
-          .select()
-          .from(products)
-          .where(eq(products.id, item.productId));
+    for (const item of items) {
+      const productId = Number(item?.productId);
+      const quantity = Number(item?.quantity ?? 0);
 
-        if (!product) {
-          throw new Error(`Product ${item.productId} not found`);
-        }
+      if (!Number.isInteger(productId) || productId <= 0) {
+        return res.status(400).json({ message: "Invalid product id" });
+      }
 
-        if (product.stock < item.quantity) {
-          throw new Error(`Insufficient stock for ${product.name}`);
-        }
+      if (!Number.isInteger(quantity) || quantity <= 0) {
+        return res.status(400).json({ message: "Invalid quantity" });
+      }
 
-        await tx
+      const [product] = await db.select().from(products).where(eq(products.id, productId));
+
+      if (!product) {
+        return res.status(404).json({ message: `Product ${productId} not found` });
+      }
+
+      if (product.stock < quantity) {
+        return res.status(400).json({ message: `Insufficient stock for ${product.name}` });
+      }
+
+      const price = Number(product.price);
+      const priceCents = Math.round(price * 100);
+      totalCents += priceCents * quantity;
+      finalItems.push({
+        productId,
+        quantity,
+        price,
+        priceCents,
+        productName: product.name,
+      });
+    }
+
+    // Create order
+    const [newOrder] = await db
+      .insert(orders)
+      .values({
+        orderNumber: `ORD-${Date.now()}`,
+        customerName,
+        customerEmail,
+        address: address || "",
+        totalCents,
+        status: "pending",
+      })
+      .returning();
+
+    // Insert order items
+    for (const fi of finalItems) {
+      await db.insert(orderItems).values({
+        orderId: newOrder.id,
+        productId: fi.productId,
+        productName: fi.productName,
+        quantity: fi.quantity,
+        price: fi.price,
+        priceCents: fi.priceCents,
+      });
+    }
+
+    // Update product stock
+    for (const item of items) {
+      const productId = Number(item.productId);
+      const quantity = Number(item.quantity);
+      
+      const [product] = await db.select().from(products).where(eq(products.id, productId));
+      if (product) {
+        await db
           .update(products)
-          .set({ stock: product.stock - item.quantity })
-          .where(eq(products.id, item.productId));
-
-        totalAmount += Number(product.price) * item.quantity;
-        finalItems.push({
-          productId: item.productId,
-          quantity: item.quantity,
-          price: Number(product.price),
-        });
+          .set({ stock: product.stock - quantity })
+          .where(eq(products.id, productId));
       }
+    }
 
-      const [newOrder] = await tx
-        .insert(orders)
-        .values({
-          orderNumber: `ORD-${Date.now()}`,
-          customerName,
-          customerEmail,
-          address: address || "",
-          totalCents: Math.round(totalAmount * 100),
-          status: "pending",
-        })
-        .returning();
-
-      for (const fi of finalItems) {
-        await tx.insert(orderItems).values({
-          orderId: newOrder.id,
-          productId: fi.productId,
-          quantity: fi.quantity,
-          price: fi.price.toString(),
-        });
-      }
-
-      return newOrder;
-    });
-
-    return res.status(201).json(result);
+    return res.status(201).json(newOrder);
   } catch (error: any) {
     console.error("Order failed:", error);
     return res.status(500).json({ message: error.message || "Failed to place order" });
@@ -124,10 +146,69 @@ export const getOrder = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Invalid order id" });
   }
 
-  const row = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
-  if (row.length === 0) {
+  const [orderRow] = await db.select().from(orders).where(eq(orders.id, id)).limit(1);
+  if (!orderRow) {
     return res.status(404).json({ message: "Order not found" });
   }
 
-  res.json(row[0]);
+  const itemRows = await db
+    .select({
+      id: orderItems.id,
+      productId: orderItems.productId,
+      quantity: orderItems.quantity,
+      price: orderItems.price,
+      productName: products.name,
+      productPrice: products.price,
+    })
+    .from(orderItems)
+    .leftJoin(products, eq(orderItems.productId, products.id))
+    .where(eq(orderItems.orderId, id));
+
+  const items = itemRows.map((row) => {
+    const priceNumber = Number(row.price);
+    return {
+      id: row.id,
+      productId: row.productId,
+      quantity: row.quantity,
+      price: Number.isFinite(priceNumber) ? priceNumber : 0,
+      priceCents: Number.isFinite(priceNumber) ? Math.round(priceNumber * 100) : 0,
+      productName: row.productName ?? "",
+      productPrice: Number(row.productPrice ?? priceNumber ?? 0),
+    };
+  });
+
+  const total = Number.isFinite(orderRow.totalCents) ? orderRow.totalCents / 100 : 0;
+
+  res.json({ ...orderRow, total, items });
+};
+
+export const updateOrderStatus = async (req: Request, res: Response) => {
+  try {
+    const id = Number(req.params.id);
+    const { status } = req.body;
+
+    if (!Number.isInteger(id)) {
+      return res.status(400).json({ message: "Invalid order id" });
+    }
+
+    const validStatuses = ["pending", "paid", "completed", "cancelled", "refunded", "failed"];
+    if (!validStatuses.includes(status)) {
+      return res.status(400).json({ message: "Invalid status" });
+    }
+
+    const [updatedOrder] = await db
+      .update(orders)
+      .set({ status, updatedAt: new Date() })
+      .where(eq(orders.id, id))
+      .returning();
+
+    if (!updatedOrder) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    res.json(updatedOrder);
+  } catch (error: any) {
+    console.error("Error updating order status:", error);
+    res.status(500).json({ message: error.message || "Failed to update order status" });
+  }
 };

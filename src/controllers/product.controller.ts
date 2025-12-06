@@ -175,8 +175,10 @@ function buildFilters(query: Request["query"]) {
     conditions.push(like(products.name, `%${search}%`));
   }
 
-  if (status && ["published", "unpublished", "archived"].includes(status)) {
-    conditions.push(eq(products.status, status as any));
+  if (status) {
+    if (status === "published" || status === "unpublished" || status === "archived") {
+      conditions.push(eq(products.status, status));
+    }
   }
 
   if (category) {

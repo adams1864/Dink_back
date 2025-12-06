@@ -278,30 +278,31 @@ export const createBundle = async (req: Request, res: Response) => {
   if (!description) return res.status(400).json({ message: "Missing required field: description" });
 
   try {
-    const bundle = await db.transaction(async (tx) => {
-      const insertResult = await tx
-        .insert(bundles)
-        .values({
+    // Create bundle (no transaction - Neon HTTP driver doesn't support it)
+    const insertResult = await db
+      .insert(bundles)
+      .values({
         title,
         description,
         status: normalizedStatus,
         coverImage,
       })
-        .returning({ id: bundles.id });
+      .returning({ id: bundles.id });
 
-      const bundleId = extractInsertId(insertResult);
-      if (!bundleId) {
-        throw new Error("Unable to determine bundle id after insert");
-      }
+    const bundleId = insertResult[0]?.id;
+    if (!bundleId) {
+      throw new Error("Unable to determine bundle id after insert");
+    }
 
-      if (validProductIds.length > 0) {
-        const relations = validProductIds.map((productId: number) => ({ bundleId, productId }));
-        await tx.insert(bundleProducts).values(relations);
-      }
+    // Insert product associations
+    if (validProductIds.length > 0) {
+      const relations = validProductIds.map((productId: number) => ({ bundleId, productId }));
+      await db.insert(bundleProducts).values(relations);
+    }
 
-      const rows = await tx.select().from(bundles).where(eq(bundles.id, bundleId)).limit(1);
-      return rows[0];
-    });
+    // Fetch the created bundle
+    const rows = await db.select().from(bundles).where(eq(bundles.id, bundleId)).limit(1);
+    const bundle = rows[0];
 
     if (!bundle) {
       return res.status(500).json({ message: "Failed to create bundle" });
@@ -365,13 +366,12 @@ export const updateBundle = async (req: Request, res: Response) => {
       });
     }
 
-    await db.transaction(async (tx) => {
-      await tx.delete(bundleProducts).where(eq(bundleProducts.bundleId, id));
-      if (validProductIds.length > 0) {
-        const relations = validProductIds.map((productId: number) => ({ bundleId: id, productId }));
-        await tx.insert(bundleProducts).values(relations);
-      }
-    });
+    // Update product associations (no transaction - Neon HTTP driver doesn't support it)
+    await db.delete(bundleProducts).where(eq(bundleProducts.bundleId, id));
+    if (validProductIds.length > 0) {
+      const relations = validProductIds.map((productId: number) => ({ bundleId: id, productId }));
+      await db.insert(bundleProducts).values(relations);
+    }
   }
 
   const updated = await db.select().from(bundles).where(eq(bundles.id, id)).limit(1);

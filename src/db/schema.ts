@@ -15,9 +15,6 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 
-const productStatusEnum = pgEnum("product_status", ["published", "unpublished", "archived"]);
-const bundleStatusEnum = pgEnum("bundle_status", ["published", "unpublished"]);
-
 export const products = pgTable("products", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -28,7 +25,7 @@ export const products = pgTable("products", {
   color: varchar("color", { length: 100 }).default(""),
   price: numeric("price", { precision: 10, scale: 2 }).notNull(),
   stock: integer("stock").default(0).notNull(),
-  status: productStatusEnum("status").default("unpublished").notNull(),
+  status: varchar("status", { length: 50 }).default("unpublished").notNull(),
   coverImage: varchar("cover_image", { length: 255 }).default(""),
   image1: varchar("image_1", { length: 255 }).default(""),
   image2: varchar("image_2", { length: 255 }).default(""),
@@ -39,7 +36,7 @@ export const bundles = pgTable("bundles", {
   id: serial("id").primaryKey(),
   title: varchar("title", { length: 255 }).notNull(),
   description: text("description"),
-  status: bundleStatusEnum("status").default("unpublished").notNull(),
+  status: varchar("status", { length: 50 }).default("unpublished").notNull(),
   coverImage: varchar("cover_image", { length: 255 }).default(""),
   createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: false })

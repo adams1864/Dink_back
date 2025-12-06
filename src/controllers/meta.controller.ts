@@ -1,15 +1,18 @@
 import type { Request, Response } from "express";
-import { sql } from "drizzle-orm";
+import { sql, inArray } from "drizzle-orm";
 import { db } from "../db/index.js";
 import { bundles, orders, products } from "../db/schema.js";
 
 export const getMeta = async (_req: Request, res: Response) => {
+  const allowedRevenueStatuses = ["paid", "completed"] as const;
+
   const [productCount] = await db.select({ value: sql<number>`count(*)` }).from(products);
   const [bundleCount] = await db.select({ value: sql<number>`count(*)` }).from(bundles);
   const [orderCount] = await db.select({ value: sql<number>`count(*)` }).from(orders);
   const [revenueRow] = await db
     .select({ value: sql<number>`coalesce(sum(${orders.totalCents}), 0)` })
-    .from(orders);
+    .from(orders)
+    .where(inArray(orders.status, allowedRevenueStatuses));
 
   const productsTotal = Number(productCount?.value ?? 0);
   const bundlesTotal = Number(bundleCount?.value ?? 0);
