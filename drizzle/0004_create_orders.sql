@@ -1,0 +1,1 @@
+-- Obsolete MySQL migration retained for history. No-op under PostgreSQL.
