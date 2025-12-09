@@ -13,10 +13,14 @@ const buildSearchPredicate = (term: string) => {
 };
 
 export const createOrder = async (req: Request, res: Response) => {
-  const { items, customerName, customerEmail, address } = req.body;
+  const { items, customerName, customerEmail, customerPhone, address, selectedSize, selectedColor, deliveryPreferences, notes } = req.body;
 
   if (!items || !Array.isArray(items) || items.length === 0) {
     return res.status(400).json({ message: "No items in order" });
+  }
+
+  if (!customerPhone || typeof customerPhone !== 'string' || customerPhone.trim().length === 0) {
+    return res.status(400).json({ message: "Customer phone is required" });
   }
 
   try {
@@ -65,7 +69,12 @@ export const createOrder = async (req: Request, res: Response) => {
         orderNumber: `ORD-${Date.now()}`,
         customerName,
         customerEmail,
+        customerPhone: customerPhone.trim(),
         address: address || "",
+        selectedSize: selectedSize || null,
+        selectedColor: selectedColor || null,
+        deliveryPreferences: deliveryPreferences || null,
+        notes: notes || null,
         totalCents,
         status: "pending",
       })

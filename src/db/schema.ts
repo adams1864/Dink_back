@@ -15,6 +15,10 @@ import {
   pgEnum,
 } from "drizzle-orm/pg-core";
 
+// Enums for product category and gender
+export const categoryEnum = pgEnum("category", ["match-kits", "training", "casual", "accessories"]);
+export const genderEnum = pgEnum("gender", ["men", "women", "kids", "unisex"]);
+
 export const products = pgTable("products", {
   id: bigserial("id", { mode: "number" }).primaryKey(),
   name: varchar("name", { length: 255 }).notNull(),
@@ -29,6 +33,13 @@ export const products = pgTable("products", {
   coverImage: varchar("cover_image", { length: 255 }).default(""),
   image1: varchar("image_1", { length: 255 }).default(""),
   image2: varchar("image_2", { length: 255 }).default(""),
+  sku: varchar("sku", { length: 100 }),
+  material: varchar("material", { length: 255 }),
+  weight: varchar("weight", { length: 100 }),
+  fit: varchar("fit", { length: 100 }),
+  features: text("features"), // JSON string array
+  isNew: boolean("is_new").default(false),
+  isBestSeller: boolean("is_best_seller").default(false),
   createdAt: timestamp("created_at", { withTimezone: false }).defaultNow().notNull(),
 });
 
@@ -68,7 +79,11 @@ export const orders = pgTable(
     orderNumber: varchar("order_number", { length: 64 }).notNull(),
     customerName: varchar("customer_name", { length: 255 }).notNull(),
     customerEmail: varchar("customer_email", { length: 255 }).notNull(),
+    customerPhone: varchar("customer_phone", { length: 20 }).notNull(),
     address: text("address").notNull().default(""),
+    selectedSize: varchar("selected_size", { length: 50 }),
+    selectedColor: varchar("selected_color", { length: 50 }),
+    deliveryPreferences: text("delivery_preferences"),
     status: varchar("status", { length: 50 }).default("pending"),
     totalCents: integer("total_cents").default(0),
     notes: text("notes"),

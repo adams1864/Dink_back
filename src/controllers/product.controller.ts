@@ -120,6 +120,19 @@ export function mapProductRow(row: ProductRow) {
   const colorValues = colorRaw ? colorRaw.split(",").filter(Boolean) : [];
   const colorSwatches = colorValues.length > 0 ? mapColorSwatches(colorRaw) : [];
 
+  // Parse features JSON array
+  let features: string[] = [];
+  try {
+    if (row.features && typeof row.features === 'string') {
+      const parsed = JSON.parse(row.features);
+      if (Array.isArray(parsed)) {
+        features = parsed.filter(f => typeof f === 'string');
+      }
+    }
+  } catch (e) {
+    features = [];
+  }
+
   return {
     id: row.id,
     name: row.name,
@@ -137,6 +150,13 @@ export function mapProductRow(row: ProductRow) {
     color: colorRaw,
     colorValues,
     colors: colorSwatches,
+    sku: row.sku ?? "",
+    material: row.material ?? "",
+    weight: row.weight ?? "",
+    fit: row.fit ?? "",
+    features,
+    isNew: row.isNew ?? false,
+    isBestSeller: row.isBestSeller ?? false,
     createdAt: toIsoString(row.createdAt),
   };
 }
@@ -170,6 +190,7 @@ function buildFilters(query: Request["query"]) {
   const search = typeof query.search === "string" ? query.search.trim() : "";
   const status = typeof query.status === "string" ? query.status.trim() : "";
   const category = typeof query.category === "string" ? query.category.trim() : "";
+  const gender = typeof query.gender === "string" ? query.gender.trim() : "";
 
   if (search) {
     conditions.push(like(products.name, `%${search}%`));
@@ -183,6 +204,10 @@ function buildFilters(query: Request["query"]) {
 
   if (category) {
     conditions.push(eq(products.category, category));
+  }
+
+  if (gender) {
+    conditions.push(eq(products.gender, gender));
   }
 
   if (conditions.length === 0) return undefined;
