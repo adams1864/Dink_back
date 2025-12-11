@@ -25,6 +25,7 @@ const SORTABLE_COLUMNS = {
   createdAt: products.createdAt,
   name: products.name,
   price: products.price,
+  stock: products.stock,
   status: products.status,
 } as const;
 
@@ -187,7 +188,11 @@ function resolveUploadedPath(file?: Express.Multer.File): string | null {
 
 function buildFilters(query: Request["query"]) {
   const conditions = [] as any[];
-  const search = typeof query.search === "string" ? query.search.trim() : "";
+  const search = typeof query.search === "string"
+    ? query.search.trim()
+    : typeof query.q === "string"
+    ? query.q.trim()
+    : "";
   const status = typeof query.status === "string" ? query.status.trim() : "";
   const category = typeof query.category === "string" ? query.category.trim() : "";
   const gender = typeof query.gender === "string" ? query.gender.trim() : "";
@@ -221,8 +226,10 @@ export const getProducts = async (req: Request, res: Response) => {
   const perPage = Math.min(perPageRaw, 100);
   const offset = (page - 1) * perPage;
 
-  const sortKey = typeof req.query.sort === "string" && req.query.sort in SORTABLE_COLUMNS ? (req.query.sort as keyof typeof SORTABLE_COLUMNS) : "createdAt";
-  const sortOrder = req.query.order === "asc" ? "asc" : "desc";
+  const sortParam = (req.query.sortBy ?? req.query.sort) as string | undefined;
+  const sortKey = sortParam && sortParam in SORTABLE_COLUMNS ? (sortParam as keyof typeof SORTABLE_COLUMNS) : "createdAt";
+  const sortOrderParam = (req.query.sortOrder ?? req.query.order) as string | undefined;
+  const sortOrder = sortOrderParam === "asc" ? "asc" : "desc";
   const sortColumn = SORTABLE_COLUMNS[sortKey];
 
   const whereClause = buildFilters(req.query);
@@ -251,6 +258,8 @@ export const getProducts = async (req: Request, res: Response) => {
       perPage,
       total,
       totalPages: Math.max(1, Math.ceil(total / perPage)),
+      sortBy: sortKey,
+      sortOrder,
     },
   });
 };
