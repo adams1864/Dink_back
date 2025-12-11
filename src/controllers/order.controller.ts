@@ -205,15 +205,45 @@ export const updateOrderStatus = async (req: Request, res: Response) => {
       return res.status(400).json({ message: "Invalid status" });
     }
 
+    // Get current order
+    const [currentOrder] = await db.select().from(orders).where(eq(orders.id, id));
+    
+    if (!currentOrder) {
+      return res.status(404).json({ message: "Order not found" });
+    }
+
+    // If status is changing to "paid" and wasn't paid before, decrement stock
+    if (status === "paid" && currentOrder.status !== "paid") {
+      // Get order items
+      const items = await db.select().from(orderItems).where(eq(orderItems.orderId, id));
+      
+      // Decrement stock for each product
+      for (const item of items) {
+        const [product] = await db.select().from(products).where(eq(products.id, item.productId));
+        
+        if (product) {
+          const newStock = product.stock - item.quantity;
+          
+          if (newStock < 0) {
+            return res.status(400).json({ 
+              message: `Insufficient stock for ${product.name}. Available: ${product.stock}, Requested: ${item.quantity}` 
+            });
+          }
+          
+          await db
+            .update(products)
+            .set({ stock: newStock })
+            .where(eq(products.id, item.productId));
+        }
+      }
+    }
+
+    // Update order status
     const [updatedOrder] = await db
       .update(orders)
       .set({ status, updatedAt: new Date() })
       .where(eq(orders.id, id))
       .returning();
-
-    if (!updatedOrder) {
-      return res.status(404).json({ message: "Order not found" });
-    }
 
     res.json(updatedOrder);
   } catch (error: any) {

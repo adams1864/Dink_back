@@ -7,6 +7,7 @@ import productRoutes from "./routes/product.routes.js";
 import bundleRoutes from "./routes/bundle.routes.js";
 import orderRoutes from "./routes/order.routes.js";import metaRoutes from "./routes/meta.routes.js";
 import authRoutes from "./auth/auth.routes.js";
+import uploadRoutes from "./routes/upload.routes.js";
 
 const app = express();
 
@@ -35,6 +36,7 @@ app.get("/health", (_req, res) => {
 });
 
 app.use("/api/auth", authRoutes);
+app.use("/api/upload", uploadRoutes);
 app.use("/api/products", productRoutes);
 app.use("/api/bundles", bundleRoutes);
 app.use("/api/orders", orderRoutes);
