@@ -176,18 +176,16 @@ export const getNewOrdersSince = async (req: Request, res: Response) => {
   try {
     const sinceRaw = typeof req.query.since === "string" ? req.query.since.trim() : "";
 
-    if (!sinceRaw) {
-      const [latestRow] = await db
-        .select({ latestCreatedAt: sql<Date | null>`max(${orders.createdAt})` })
-        .from(orders);
-
-      return res.json({ newCount: 0, latestCreatedAt: latestRow?.latestCreatedAt ?? null });
+    let sinceDate: Date | null = null;
+    if (sinceRaw) {
+      const parsed = new Date(sinceRaw);
+      if (Number.isNaN(parsed.getTime())) {
+        return res.status(400).json({ message: "Invalid since parameter" });
+      }
+      sinceDate = parsed;
     }
 
-    const sinceDate = new Date(sinceRaw);
-    if (Number.isNaN(sinceDate.getTime())) {
-      return res.status(400).json({ message: "Invalid since parameter" });
-    }
+    const whereClause = sinceDate ? gt(orders.createdAt, sinceDate) : undefined;
 
     const [row] = await db
       .select({
@@ -195,11 +193,26 @@ export const getNewOrdersSince = async (req: Request, res: Response) => {
         latestCreatedAt: sql<Date | null>`max(${orders.createdAt})`,
       })
       .from(orders)
-      .where(gt(orders.createdAt, sinceDate));
+      .where(whereClause ?? sql`true`);
+
+    const latestOrders = await db
+      .select({
+        id: orders.id,
+        orderNumber: orders.orderNumber,
+        customerName: orders.customerName,
+        status: orders.status,
+        totalCents: orders.totalCents,
+        createdAt: orders.createdAt,
+      })
+      .from(orders)
+      .where(whereClause ?? sql`true`)
+      .orderBy(desc(orders.createdAt))
+      .limit(3);
 
     res.json({
       newCount: Number(row?.newCount ?? 0),
       latestCreatedAt: row?.latestCreatedAt ?? null,
+      latestOrders,
     });
   } catch (error: any) {
     console.error("Error checking for new orders:", error);
