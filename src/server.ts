@@ -5,9 +5,11 @@ import path from "path";
 import { loggingMiddleware } from "./middleware/logging.js";
 import productRoutes from "./routes/product.routes.js";
 import bundleRoutes from "./routes/bundle.routes.js";
-import orderRoutes from "./routes/order.routes.js";import metaRoutes from "./routes/meta.routes.js";
+import orderRoutes from "./routes/order.routes.js";
+import metaRoutes from "./routes/meta.routes.js";
 import authRoutes from "./auth/auth.routes.js";
 import uploadRoutes from "./routes/upload.routes.js";
+import salesRoutes from "./routes/sales.routes.js";
 
 const app = express();
 
@@ -41,6 +43,7 @@ app.use("/api/products", productRoutes);
 app.use("/api/bundles", bundleRoutes);
 app.use("/api/orders", orderRoutes);
 app.use("/api/meta", metaRoutes);
+app.use("/api/sales", salesRoutes);
 
 const PORT = process.env.PORT ? Number(process.env.PORT) : 4000;
 app.listen(PORT, () => console.log(`Server running → http://localhost:${PORT}`));
