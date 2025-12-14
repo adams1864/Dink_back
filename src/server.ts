@@ -13,20 +13,25 @@ import salesRoutes from "./routes/sales.routes.js";
 
 const app = express();
 
-const defaultOrigins = ["http://localhost:3000", "http://127.0.0.1:3000"];
-const allowedOrigins = (process.env.CORS_ORIGINS ?? "")
-	.split(",")
-	.map((origin) => origin.trim())
-	.filter(Boolean);
+// --- CORS (allow Vercel + localhost) ---
+const allowedOrigins = (process.env.CORS_ORIGINS || '')
+  .split(',')
+  .map(o => o.trim())
+  .filter(Boolean);
 
-const corsOptions = {
-	origin: allowedOrigins.length > 0 ? allowedOrigins : defaultOrigins,
-	credentials: true,
-	exposedHeaders: ["X-Total-Count"],
-};
+app.use((req, res, next) => {
+  const origin = req.headers.origin;
+  if (origin && allowedOrigins.includes(origin)) {
+    res.header('Access-Control-Allow-Origin', origin);
+  }
+  res.header('Access-Control-Allow-Methods', 'GET,POST,PUT,PATCH,DELETE,OPTIONS');
+  res.header('Access-Control-Allow-Headers', 'Content-Type,Authorization');
+  res.header('Access-Control-Allow-Credentials', 'true');
+  if (req.method === 'OPTIONS') return res.sendStatus(204);
+  next();
+});
 
 app.use(loggingMiddleware);
-app.use(cors(corsOptions));
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
