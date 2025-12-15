@@ -444,6 +444,22 @@ export const deleteProduct = async (req: Request, res: Response) => {
     return res.status(400).json({ message: "Invalid product id" });
   }
 
-  await db.delete(products).where(eq(products.id, id));
-  res.status(204).send();
+  try {
+    await db.delete(products).where(eq(products.id, id));
+    return res.status(204).send();
+  } catch (error) {
+    console.error(`Failed to delete product ${id}:`, error);
+
+    const msg =
+      error instanceof Error && typeof error.message === 'string'
+        ? error.message
+        : 'Failed to delete product';
+
+    // Heuristic for FK / constraint errors
+    if (typeof msg === 'string' && /foreign|constraint|referenced|violat/i.test(msg)) {
+      return res.status(409).json({ message: 'Cannot delete product: it is referenced by other records' });
+    }
+
+    return res.status(500).json({ message: msg });
+  }
 };
